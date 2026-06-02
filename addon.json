@@ -1,0 +1,7 @@
+{
+  "description": "Art-Net (DMX512-over-UDP) sender for stage lighting and DMX fixtures. Broadcast or unicast, multi-universe, manual send plus background auto-refresh.",
+  "author": "tettou771",
+  "license": "MIT",
+  "category": "hardware",
+  "keywords": ["artnet", "dmx", "dmx512", "lighting", "stage", "network"]
+}
