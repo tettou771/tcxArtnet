@@ -5,6 +5,12 @@ lighting fixtures and Art-Net nodes (moving heads, LED pars, dimmers, …) strai
 from a TrussC app over UDP — no external library, it just wraps the core
 `UdpSocket`.
 
+> ⚠️ **Not yet tested against real hardware.** The packet format is verified by a
+> loopback test (a well-formed ArtDmx frame with correct opcode / length / channel
+> data, plus the ~30 Hz auto-send), but it hasn't been confirmed against an actual
+> Art-Net node / DMX fixture yet. Use at your own risk and please report back if
+> you try it on hardware.
+
 > **Scope:** sending only (controller side). Receiving / node mode
 > (`ArtnetReceiver`, ArtPoll discovery) is intentionally left out for now; the
 > sender is a standalone class so a receiver can be added later without touching it.
