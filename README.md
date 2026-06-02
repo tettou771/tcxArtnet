@@ -77,18 +77,28 @@ void close();                                     // stop thread + close socket
 ArtnetSender& setChannel(universe, channel, value);         // value: 0-255
 ArtnetSender& setChannels(universe, startChannel, values);  // vector<uint8_t>
 ArtnetSender& setColor(universe, startChannel, Color);      // RGB -> 3 channels
-ArtnetSender& clear(universe);                              // zero one universe
-ArtnetSender& clearAll();                                   // blackout
+ArtnetSender& clear(universe);                              // zero, keep sending
+ArtnetSender& clearAll();                                   // blackout (all kept)
 uint8_t getChannel(universe, channel) const;
+
+// Active universe set
+ArtnetSender& removeUniverse(universe);     // stop sending one universe, free it
+ArtnetSender& removeAllUniverses();         // stop sending everything
+size_t getUniverseCount() const;
+std::vector<int> getUniverses() const;      // active universe numbers, ascending
 
 // Send
 bool send();                  // send every active universe once
 bool sendUniverse(universe);  // send one universe once
 
 // Background auto-refresh
-void startAutoSend(fps = 30);  // clamped to <= 44 Hz; call again to retune fps
+void startAutoSend(fps = 30);  // floored to >=1 Hz, clamped to <=44 Hz; re-tunes if running
 void stopAutoSend();
 bool isAutoSending() const;
+
+// Limits
+ArtnetSender& setMaxUniverses(n);   // cap on distinct universes (default 2048)
+size_t getMaxUniverses() const;
 ```
 
 ### Notes
@@ -96,7 +106,18 @@ bool isAutoSending() const;
 - **Channels are 1-based.** Channel 1 is the first DMX slot — same numbering as
   every lighting desk and fixture manual.
 - **Universes** use the 15-bit Art-Net port address (`Net` + `SubUni`); pass the
-  plain universe number (e.g. `0`, `1`, …, up to `32767`).
+  plain universe number `0..32767`. Out-of-range values are rejected with a warning.
+- **`clear` vs `remove`:** `clear(u)` zeros a universe but keeps sending it (a
+  blackout that still refreshes the DMX link); `removeUniverse(u)` drops it from
+  the active set entirely so it's no longer transmitted.
+- **Range-safe writes:** if a `setChannels` / `setColor` block doesn't fully fit
+  in 1..512, nothing is written (and you get a warning) — a partial write would
+  silently misalign the data.
+- **Universe cap:** a sender holds at most `getMaxUniverses()` distinct universes
+  (default **2048**). New universes past the cap are rejected with a warning;
+  existing ones keep working. This bounds the per-frame send count so an
+  attacker-influenced universe index can't grow the active set toward 32768 and
+  saturate the send loop. Raise it with `setMaxUniverses()` for huge LED rigs.
 - Each universe always goes out as a full **512-byte** frame for broad node
   compatibility.
 - The auto-send thread and your `update()` thread share the channel buffers under
