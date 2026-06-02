@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
+
+jobs:
+  # Builds tcxArtnet against TrussC on macOS / Windows / Linux, then runs the
+  # headless testApp. test_mode "test" fails the job if it exits non-zero, so
+  # the loopback packet-format + edge-case assertions gate every push/PR.
+  build:
+    uses: 2bbb/trussc-actions/.github/workflows/build-addon.yml@build-addon-cache-v1
+    with:
+      addon_name: "tcxArtnet"
+      test_app: "testApp"
+      test_mode: "test"

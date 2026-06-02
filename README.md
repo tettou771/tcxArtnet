@@ -1,5 +1,7 @@
 # tcxArtnet
 
+[![CI](https://github.com/tettou771/tcxArtnet/actions/workflows/ci.yml/badge.svg)](https://github.com/tettou771/tcxArtnet/actions/workflows/ci.yml)
+
 Art-Net sender for [TrussC](https://github.com/TrussC-org/TrussC). Drive DMX512
 lighting fixtures and Art-Net nodes (moving heads, LED pars, dimmers, …) straight
 from a TrussC app over UDP — no external library, it just wraps the core
@@ -141,6 +143,13 @@ and watch the packets:
 ```bash
 nc -u -l 6454 | xxd | head      # first 8 bytes read "Art-Net", opcode 00 50
 ```
+
+## Tests
+
+`testApp/` is a headless console test: it sends an ArtDmx frame to loopback and
+asserts the packet format, plus the channel/universe edge cases and the universe
+cap. CI builds it on macOS / Windows / Linux and runs it (`test_mode: test`), so
+a non-zero exit fails the build. Run it locally with `trusscli run -p testApp`.
 
 ## License
 
