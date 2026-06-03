@@ -18,6 +18,7 @@
 // =============================================================================
 
 #include "tcxArtnetConstants.h"
+#include "tcxArtnetTypes.h"
 
 #include "tc/network/tcUdpSocket.h"
 #include "tc/events/tcEvent.h"
@@ -27,6 +28,7 @@
 #include <cstdint>
 #include <map>
 #include <mutex>
+#include <string>
 #include <vector>
 
 namespace tcx {
@@ -54,8 +56,10 @@ public:
     ArtnetReceiver& operator=(const ArtnetReceiver&) = delete;
 
     // Events fire on the receive thread — guard any shared state you touch.
-    tc::Event<DmxFrame> onDmx;   // each received ArtDmx (state already updated)
-    tc::Event<int> onSync;       // an ArtSync arrived (arg reserved, always 0)
+    tc::Event<DmxFrame> onDmx;          // each received ArtDmx (state updated)
+    tc::Event<int> onSync;             // an ArtSync arrived (arg reserved, 0)
+    tc::Event<std::string> onPoll;     // an ArtPoll arrived (arg: poller's IP)
+    tc::Event<ArtnetNodeInfo> onNode;  // an ArtPollReply arrived (discovered node)
 
     bool setup(int port = ARTNET_PORT);  // bind + start receive thread
     void close();
@@ -69,15 +73,22 @@ public:
     bool hasUniverse(int universe) const;
     bool hasNewData();   // true if any universe updated since the last call (clears)
 
+    // Nodes discovered from ArtPollReply (a controller sends ArtPoll, e.g. via
+    // ArtnetSender::sendPoll(), and the replies accumulate here).
+    std::vector<ArtnetNodeInfo> getNodes() const;
+    void clearNodes();
+
 private:
     void handleReceive(tc::UdpReceiveEventArgs& args);
-    void parsePacket(const uint8_t* data, size_t size);
+    void parsePacket(const uint8_t* data, size_t size, const std::string& remoteHost);
+    void parsePollReply(const uint8_t* p, size_t size, const std::string& remoteHost);
 
     tc::UdpSocket socket_;
     tc::EventListener receiveListener_;
     int port_ = 0;
 
     std::map<int, std::array<uint8_t, DMX_UNIVERSE_SIZE>> universes_;
+    std::map<std::string, ArtnetNodeInfo> nodes_;  // discovered nodes, keyed by IP
     mutable std::mutex dataMutex_;
     bool newData_ = false;
 };

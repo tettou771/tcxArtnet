@@ -7,6 +7,7 @@
 #include "tc/utils/tcLog.h"
 
 #include <chrono>
+#include <cstring>
 
 using namespace std;
 
@@ -192,6 +193,37 @@ bool ArtnetSender::sendSync() {
     return sendSyncLocked();
 }
 
+// ----------------------------------------------------------------------------- discovery
+bool ArtnetSender::sendPoll() {
+    if (!socket_.isValid() && !socket_.create()) return false;
+    vector<uint8_t> pkt;
+    buildArtPollPacket(pkt);
+    lock_guard<mutex> lock(dataMutex_);
+    if (destinations_.empty()) return false;
+    bool ok = true;
+    for (auto& d : destinations_) {
+        if (!socket_.sendTo(d.host, d.port, pkt.data(), pkt.size())) ok = false;
+    }
+    return ok;
+}
+
+bool ArtnetSender::sendPollReply(const NodeIdentity& id, const string& host, int port) {
+    if (!socket_.isValid() && !socket_.create()) return false;
+    vector<uint8_t> pkt;
+    bool ok = true;
+    if (id.universes.empty()) {
+        buildArtPollReplyPacket(id, -1, pkt);  // node serves no universes
+        ok = socket_.sendTo(host, port, pkt.data(), pkt.size());
+    } else {
+        // One ArtPollReply per declared universe (keeps Net/Sub/SwOut trivial).
+        for (int u : id.universes) {
+            buildArtPollReplyPacket(id, u, pkt);
+            if (!socket_.sendTo(host, port, pkt.data(), pkt.size())) ok = false;
+        }
+    }
+    return ok;
+}
+
 // ----------------------------------------------------------------------------- auto-send
 void ArtnetSender::startAutoSend(float fps) {
     startAutoSendImpl(fps, /*synchronous=*/false);
@@ -284,6 +316,54 @@ void ArtnetSender::buildArtSyncPacket(vector<uint8_t>& out) const {
     // Aux1, Aux2 (reserved, transmit as zero)
     out.push_back(0);
     out.push_back(0);
+}
+
+void ArtnetSender::buildArtPollPacket(vector<uint8_t>& out) const {
+    out.assign(14, 0);
+    memcpy(out.data(), "Art-Net", 7);          // out[7] already 0
+    out[8] = static_cast<uint8_t>(ARTNET_OPCODE_POLL & 0xFF);
+    out[9] = static_cast<uint8_t>((ARTNET_OPCODE_POLL >> 8) & 0xFF);
+    out[10] = 0;
+    out[11] = ARTNET_PROTOCOL_VER;
+    out[12] = 0;  // TalkToMe (0 = reply only when polled)
+    out[13] = 0;  // Priority (diagnostics)
+}
+
+void ArtnetSender::buildArtPollReplyPacket(const NodeIdentity& id, int universe,
+                                           vector<uint8_t>& out) const {
+    out.assign(239, 0);  // Art-Net 4 ArtPollReply; unset fields stay zero
+    memcpy(out.data(), "Art-Net", 7);
+    out[8] = static_cast<uint8_t>(ARTNET_OPCODE_POLLREPLY & 0xFF);
+    out[9] = static_cast<uint8_t>((ARTNET_OPCODE_POLLREPLY >> 8) & 0xFF);
+    // IP[10..13] left 0: the reply's UDP source IP is the reliable address.
+    out[14] = 0x36;  // Port 6454 (0x1936), little-endian
+    out[15] = 0x19;
+    out[16] = 0;                     // VersInfoH
+    out[17] = ARTNET_PROTOCOL_VER;   // VersInfoL
+    if (universe >= 0) {
+        out[18] = static_cast<uint8_t>((universe >> 8) & 0x7F);  // NetSwitch
+        out[19] = static_cast<uint8_t>((universe >> 4) & 0x0F);  // SubSwitch
+    }
+    out[20] = static_cast<uint8_t>((id.oem >> 8) & 0xFF);  // OemHi
+    out[21] = static_cast<uint8_t>(id.oem & 0xFF);         // OemLo
+    out[23] = 0;                                           // Status1
+    out[24] = static_cast<uint8_t>(id.esta & 0xFF);        // EstaManLo (little-endian)
+    out[25] = static_cast<uint8_t>((id.esta >> 8) & 0xFF); // EstaManHi
+    // ShortName[26..43] (18, null-terminated), LongName[44..107] (64).
+    {
+        size_t n = id.shortName.size(); if (n > 17) n = 17;
+        memcpy(out.data() + 26, id.shortName.data(), n);
+        size_t m = id.longName.size(); if (m > 63) m = 63;
+        memcpy(out.data() + 44, id.longName.data(), m);
+    }
+    if (universe >= 0) {
+        out[173] = 1;     // NumPortsLo = 1 (out[172] hi = 0)
+        out[174] = 0x80;  // PortTypes[0]: bit7 = output, protocol DMX512
+        out[182] = 0x80;  // GoodOutput[0]: bit7 = data being output
+        out[190] = static_cast<uint8_t>(universe & 0x0F);  // SwOut[0]
+    }
+    out[200] = 0x00;  // Style = StNode
+    out[211] = 1;     // BindIndex (1-based)
 }
 
 bool ArtnetSender::sendSyncLocked() {

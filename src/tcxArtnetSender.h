@@ -18,6 +18,7 @@
 // =============================================================================
 
 #include "tcxArtnetConstants.h"
+#include "tcxArtnetTypes.h"
 
 #include "tcColor.h"
 #include "tc/network/tcUdpSocket.h"
@@ -118,6 +119,14 @@ public:
     void stopAutoSend();
     bool isAutoSending() const { return running_.load(); }
 
+    // ------------------------------------------------------------------ discovery (ArtPoll)
+    // Broadcast an ArtPoll to all destinations (nodes reply with ArtPollReply,
+    // which an ArtnetReceiver collects). Set a broadcast destination to find all.
+    bool sendPoll();
+    // Send an ArtPollReply describing `id` to one host (used to answer an ArtPoll
+    // when acting as a discoverable node). One reply per declared universe.
+    bool sendPollReply(const NodeIdentity& id, const std::string& host, int port = ARTNET_PORT);
+
 private:
     bool validUniverse(int universe) const;
     // Must hold dataMutex_. Returns the universe buffer, creating it if needed;
@@ -127,6 +136,9 @@ private:
                            const std::array<uint8_t, DMX_UNIVERSE_SIZE>& data,
                            std::vector<uint8_t>& out) const;
     void buildArtSyncPacket(std::vector<uint8_t>& out) const;
+    void buildArtPollPacket(std::vector<uint8_t>& out) const;
+    // Build one ArtPollReply. universe < 0 means "no ports" (node serves none).
+    void buildArtPollReplyPacket(const NodeIdentity& id, int universe, std::vector<uint8_t>& out) const;
     bool sendUniverseLocked(int universe, const std::array<uint8_t, DMX_UNIVERSE_SIZE>& data);
     bool sendSyncLocked();  // must hold dataMutex_
     // Shared impl for both startAutoSend variants: retunes if already running so

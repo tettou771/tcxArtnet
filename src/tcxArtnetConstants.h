@@ -42,6 +42,15 @@ inline constexpr uint16_t ARTNET_OPCODE_DMX = 0x5000;
 // Little-endian on the wire: 0x00 0x52.
 inline constexpr uint16_t ARTNET_OPCODE_SYNC = 0x5200;
 
+// OpPoll (controller asks "who's there?") and OpPollReply (node describes itself).
+// Used for node discovery. Little-endian on the wire: 0x00 0x20 / 0x00 0x21.
+inline constexpr uint16_t ARTNET_OPCODE_POLL      = 0x2000;
+inline constexpr uint16_t ARTNET_OPCODE_POLLREPLY = 0x2100;
+
+// OEM code reported in ArtPollReply when you haven't registered one with
+// Artistic Licence (the "unknown product" value).
+inline constexpr uint16_t ARTNET_OEM_UNKNOWN = 0x00FF;
+
 // Protocol version 14 (current). Sent big-endian: hi=0, lo=14.
 inline constexpr uint8_t ARTNET_PROTOCOL_VER = 14;
 

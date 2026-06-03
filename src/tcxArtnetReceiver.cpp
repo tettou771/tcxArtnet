@@ -4,6 +4,7 @@
 
 #include "tcxArtnetReceiver.h"
 
+#include <algorithm>
 #include <cstring>
 
 using namespace std;
@@ -29,6 +30,7 @@ void ArtnetReceiver::close() {
     port_ = 0;
     lock_guard<mutex> lock(dataMutex_);
     universes_.clear();
+    nodes_.clear();
     newData_ = false;
 }
 
@@ -39,10 +41,11 @@ bool ArtnetReceiver::isListening() const {
 // ----------------------------------------------------------------------------- receive
 void ArtnetReceiver::handleReceive(tc::UdpReceiveEventArgs& args) {
     if (args.data.empty()) return;
-    parsePacket(reinterpret_cast<const uint8_t*>(args.data.data()), args.data.size());
+    parsePacket(reinterpret_cast<const uint8_t*>(args.data.data()), args.data.size(),
+                args.remoteHost);
 }
 
-void ArtnetReceiver::parsePacket(const uint8_t* p, size_t size) {
+void ArtnetReceiver::parsePacket(const uint8_t* p, size_t size, const string& remoteHost) {
     // Common header: "Art-Net\0" (8) + OpCode (2). 12 bytes covers up to protver.
     if (size < 12) return;
     if (memcmp(p, "Art-Net", 7) != 0 || p[7] != 0) return;  // not an Art-Net packet
@@ -53,7 +56,16 @@ void ArtnetReceiver::parsePacket(const uint8_t* p, size_t size) {
         onSync.notify(reserved);
         return;
     }
-    if (opcode != ARTNET_OPCODE_DMX) return;  // ignore ArtPoll etc.
+    if (opcode == ARTNET_OPCODE_POLL) {
+        string host = remoteHost;
+        onPoll.notify(host);  // a controller is asking us to identify (host = poller)
+        return;
+    }
+    if (opcode == ARTNET_OPCODE_POLLREPLY) {
+        parsePollReply(p, size, remoteHost);
+        return;
+    }
+    if (opcode != ARTNET_OPCODE_DMX) return;  // ignore other opcodes
     if (size < 18) return;                    // ArtDmx needs the full 18-byte header
 
     uint8_t sequence = p[12];
@@ -121,6 +133,70 @@ bool ArtnetReceiver::hasNewData() {
     bool n = newData_;
     newData_ = false;
     return n;
+}
+
+// ----------------------------------------------------------------------------- discovery
+// Reads a null-terminated string from a fixed-width field, clamped to the buffer.
+static string readField(const uint8_t* p, size_t size, size_t off, size_t maxLen) {
+    if (off >= size) return {};
+    size_t avail = size - off;
+    if (maxLen > avail) maxLen = avail;
+    size_t n = 0;
+    while (n < maxLen && p[off + n] != 0) ++n;
+    return string(reinterpret_cast<const char*>(p + off), n);
+}
+
+void ArtnetReceiver::parsePollReply(const uint8_t* p, size_t size, const string& remoteHost) {
+    // Need at least through SwOut[] (190..193) to read names + universes.
+    if (size < 194) return;
+
+    ArtnetNodeInfo info;
+    info.ip = remoteHost;                          // UDP source is the reliable address
+    info.shortName = readField(p, size, 26, 18);
+    info.longName  = readField(p, size, 44, 64);
+    info.oem  = static_cast<uint16_t>((p[20] << 8) | p[21]);
+    info.esta = static_cast<uint16_t>(p[24] | (p[25] << 8));  // little-endian
+
+    int net = p[18] & 0x7F;
+    int sub = p[19] & 0x0F;
+    int numPorts = (p[172] << 8) | p[173];
+    if (numPorts > 4) numPorts = 4;
+    for (int i = 0; i < numPorts; ++i) {
+        int swout = p[190 + i] & 0x0F;
+        info.universes.push_back((net << 8) | (sub << 4) | swout);
+    }
+
+    {
+        lock_guard<mutex> lock(dataMutex_);
+        // A node serving >4 universes sends several ArtPollReplies; merge their
+        // universes per IP rather than letting the last packet overwrite. Other
+        // fields take the latest reply's values.
+        auto& entry = nodes_[info.ip];
+        entry.ip = info.ip;
+        entry.shortName = info.shortName;
+        entry.longName = info.longName;
+        entry.oem = info.oem;
+        entry.esta = info.esta;
+        for (int u : info.universes) {
+            if (find(entry.universes.begin(), entry.universes.end(), u) == entry.universes.end())
+                entry.universes.push_back(u);
+        }
+        sort(entry.universes.begin(), entry.universes.end());
+    }
+    onNode.notify(info);
+}
+
+vector<ArtnetNodeInfo> ArtnetReceiver::getNodes() const {
+    lock_guard<mutex> lock(dataMutex_);
+    vector<ArtnetNodeInfo> result;
+    result.reserve(nodes_.size());
+    for (auto& [ip, info] : nodes_) result.push_back(info);
+    return result;
+}
+
+void ArtnetReceiver::clearNodes() {
+    lock_guard<mutex> lock(dataMutex_);
+    nodes_.clear();
 }
 
 } // namespace tcx

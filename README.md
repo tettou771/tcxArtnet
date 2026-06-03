@@ -13,13 +13,15 @@ from a TrussC app over UDP — no external library, it just wraps the core
 > Art-Net node / DMX fixture yet. Use at your own risk and please report back if
 > you try it on hardware.
 
-> **Scope:** send (`ArtnetSender`) and receive (`ArtnetReceiver`). ArtPoll node
-> discovery is not implemented yet.
+> **Scope:** send (`ArtnetSender`), receive (`ArtnetReceiver`), and node discovery
+> via ArtPoll (`ArtnetNode`).
 
 ## Features
 
 - **Send + receive** — `ArtnetSender` and `ArtnetReceiver`, both state-oriented
   (set/read channels), event + polling on the receive side.
+- **Discovery** — `ArtnetNode` bundles a sender + receiver for ArtPoll node
+  discovery and (opt-in) answering ArtPoll as a discoverable node.
 - **Multi-universe** (`setChannel(universe, channel, value)`).
 - **Broadcast by default** (`2.255.255.255:6454`), or **unicast** to a specific node.
 - **Two send modes**: manual `send()` per frame, or a background
@@ -185,6 +187,38 @@ bool hasNewData();   // any universe updated since the last call (clears on read
   moment it arrives. `onSync` just notifies you one was received (use it if you
   want to read all universes together as a coherent frame); there is no
   receive-side sync staging.
+
+## Discovery (ArtPoll)
+
+`ArtnetNode` bundles a sender + receiver and adds ArtPoll. The sender and receiver
+stay single-responsibility (one direction each); discovery just spans both, so the
+node wires them. Reach the underlying objects with `sender()` / `receiver()` for
+normal DMX I/O.
+
+```cpp
+ArtnetNode node;
+node.setup();                 // broadcast send + bind 6454
+
+// --- as a controller: find nodes on the network ---
+node.sendPoll();              // broadcast ArtPoll (every ~3s to stay fresh)
+node.receiver().onNode.listen([](ArtnetNodeInfo& n) {
+    // n.ip, n.shortName, n.longName, n.universes, n.oem, n.esta
+});
+for (auto& n : node.getNodes()) { /* polling: the discovered set so far */ }
+
+// --- as a discoverable node: answer other controllers' ArtPoll ---
+node.setShortName("Stage Left").setLongName("TrussC rig").setUniverses({0, 1});
+node.enablePollReply(true);   // opt-in; off by default
+```
+
+- **Discovery** = `sendPoll()` (outbound) + `getNodes()` / `onNode` (inbound). Set
+  a broadcast destination (the default) so all nodes hear the poll.
+- **Being discoverable** is **opt-in** (`enablePollReply(true)`) — a plain receiver
+  isn't obliged to announce itself. When on, the node answers each ArtPoll with an
+  ArtPollReply built from the identity you set (`setShortName` / `setLongName` /
+  `setUniverses` / `setVendor` (ESTA) / `setOem`). IP / MAC / version are auto.
+- A node serving several universes sends one reply per universe; the receiver
+  **merges** them per source IP, so `getNodes()` shows the full universe set.
 
 ## Example
 

@@ -84,6 +84,33 @@ int main() {
               m == 14 && std::memcmp(buf, "Art-Net", 7) == 0 && buf[7] == 0 &&
               buf[8] == 0x00 && buf[9] == 0x52 && buf[10] == 0 && buf[11] == 14);
     }
+
+    // ----- ArtPoll / ArtPollReply wire format -----
+    while (rx.receive(buf, sizeof(buf)) > 0) {}
+    int pn = -1;
+    for (int i = 0; i < 25 && pn <= 0; ++i) { tx.sendPoll(); pn = rx.receive(buf, sizeof(buf)); }
+    check("ArtPoll: 14 bytes, id + opcode 0x2000",
+          pn == 14 && std::memcmp(buf, "Art-Net", 7) == 0 &&
+          buf[8] == 0x00 && buf[9] == 0x20 && buf[11] == 14);
+
+    while (rx.receive(buf, sizeof(buf)) > 0) {}
+    NodeIdentity wid;
+    wid.shortName = "myNode";
+    wid.longName  = "my long node name";
+    wid.universes = {7};
+    wid.oem  = 0xABCD;
+    wid.esta = 0x1234;
+    int rn = -1;
+    for (int i = 0; i < 25 && rn <= 0; ++i) { tx.sendPollReply(wid, "127.0.0.1"); rn = rx.receive(buf, sizeof(buf)); }
+    check("ArtPollReply: >=194 bytes, id + opcode 0x2100",
+          rn >= 194 && std::memcmp(buf, "Art-Net", 7) == 0 && buf[8] == 0x00 && buf[9] == 0x21);
+    check("ArtPollReply shortName at offset 26", std::memcmp(buf + 26, "myNode", 7) == 0);
+    check("ArtPollReply longName at offset 44", std::memcmp(buf + 44, "my long node name", 18) == 0);
+    check("ArtPollReply oem big-endian (0xABCD -> AB CD)", buf[20] == 0xAB && buf[21] == 0xCD);
+    check("ArtPollReply esta little-endian (0x1234 -> 34 12)", buf[24] == 0x34 && buf[25] == 0x12);
+    check("ArtPollReply universe 7 -> net0 sub0 swout7 numports1",
+          buf[18] == 0 && buf[19] == 0 && buf[173] == 1 && buf[190] == 7);
+
     rx.close();
 
     // ----- state / edge cases (no network) -----
@@ -199,10 +226,57 @@ int main() {
     sleepMs(50);
     check("receiver onSync fired", syncEvents.load() > 0);
 
+    // ArtPoll -> onPoll (carries the poller's IP).
+    std::atomic<int> pollEvents{0};
+    static std::string pollHost;  // set on the receive thread, read after settle
+    auto lPoll = rrx.onPoll.listen([&](std::string& h) { pollEvents++; pollHost = h; });
+    for (int i = 0; i < 25 && pollEvents.load() == 0; ++i) { rtx.sendPoll(); sleepMs(20); }
+    sleepMs(50);
+    check("receiver onPoll fired with host 127.0.0.1",
+          pollEvents.load() > 0 && pollHost == "127.0.0.1");
+    lPoll.disconnect();
+
+    // ArtPollReply -> onNode / getNodes (a node serving universes 3 and 4).
+    std::atomic<int> nodeEvents{0};
+    auto lNode = rrx.onNode.listen([&](ArtnetNodeInfo&) { nodeEvents++; });
+    NodeIdentity nid;
+    nid.shortName = "probe";
+    nid.longName  = "probe node";
+    nid.universes = {3, 4};
+    nid.oem  = 0x1111;
+    nid.esta = 0x2222;
+    for (int i = 0; i < 12; ++i) { rtx.sendPollReply(nid, "127.0.0.1"); sleepMs(10); }
+    sleepMs(80);
+    auto nodes = rrx.getNodes();
+    check("receiver onNode fired", nodeEvents.load() > 0);
+    check("getNodes() has 1 node", nodes.size() == 1);
+    check("discovered node fields parsed",
+          !nodes.empty() && nodes[0].ip == "127.0.0.1" &&
+          nodes[0].shortName == "probe" && nodes[0].longName == "probe node" &&
+          nodes[0].oem == 0x1111 && nodes[0].esta == 0x2222);
+    check("discovered node universes merged {3,4}",
+          !nodes.empty() && nodes[0].universes == std::vector<int>({3, 4}));
+    lNode.disconnect();
+
     lDmx.disconnect();
     lSync.disconnect();
     rrx.close();
     check("getDmx after close is empty", rrx.getDmx(5).empty());
+    check("getNodes after close is empty", rrx.getNodes().empty());
+
+    // ArtnetNode identity setters chain + store (no network).
+    ArtnetNode node;
+    node.setShortName("stage-left").setLongName("Stage Left Rig").setUniverses({1, 2}).setVendor(0x7FF0);
+    check("ArtnetNode identity setters chain",
+          node.getIdentity().shortName == "stage-left" &&
+          node.getIdentity().longName == "Stage Left Rig" &&
+          node.getIdentity().universes == std::vector<int>({1, 2}) &&
+          node.getIdentity().esta == 0x7FF0);
+    check("ArtnetNode pollReply opt-in default off", !node.isPollReplyEnabled());
+    node.enablePollReply(true);
+    check("ArtnetNode enablePollReply(true)", node.isPollReplyEnabled());
+    node.enablePollReply(false);
+    check("ArtnetNode enablePollReply(false)", !node.isPollReplyEnabled());
 
     std::printf("\n=== %d passed, %d failed ===\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;

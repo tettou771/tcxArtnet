@@ -7,5 +7,7 @@
 // =============================================================================
 
 #include "tcxArtnetConstants.h"
+#include "tcxArtnetTypes.h"
 #include "tcxArtnetSender.h"
 #include "tcxArtnetReceiver.h"
+#include "tcxArtnetNode.h"
