@@ -13,17 +13,19 @@ from a TrussC app over UDP — no external library, it just wraps the core
 > Art-Net node / DMX fixture yet. Use at your own risk and please report back if
 > you try it on hardware.
 
-> **Scope:** sending only (controller side). Receiving / node mode
-> (`ArtnetReceiver`, ArtPoll discovery) is intentionally left out for now; the
-> sender is a standalone class so a receiver can be added later without touching it.
+> **Scope:** send (`ArtnetSender`) and receive (`ArtnetReceiver`). ArtPoll node
+> discovery is not implemented yet.
 
 ## Features
 
-- **Multi-universe** output (`setChannel(universe, channel, value)`).
+- **Send + receive** — `ArtnetSender` and `ArtnetReceiver`, both state-oriented
+  (set/read channels), event + polling on the receive side.
+- **Multi-universe** (`setChannel(universe, channel, value)`).
 - **Broadcast by default** (`2.255.255.255:6454`), or **unicast** to a specific node.
 - **Two send modes**: manual `send()` per frame, or a background
   `startAutoSend(fps)` thread that keeps refreshing the output (DMX wants a
   continuous resend even when values don't change).
+- **ArtSync** for tear-free multi-universe output (`sendSync()` / `startAutoSendSynced()`).
 - **Color helper**: `setColor()` maps a TrussC `Color` (0–1 float) onto three
   consecutive RGB channels.
 
@@ -135,6 +137,54 @@ size_t getMaxUniverses() const;
   compatibility.
 - The auto-send thread and your `update()` thread share the channel buffers under
   a mutex, so it's safe to set channels from `update()` while auto-send runs.
+
+## Receiving
+
+`ArtnetReceiver` binds a port and parses incoming ArtDmx into per-universe state.
+Like the sender, it's **state-oriented** (DMX is a 512-channel framebuffer, not a
+message stream), so polling reads the current value — there's no queue to drain.
+
+```cpp
+#include <tcxArtnet.h>
+using namespace tc;
+using namespace tcx;
+
+ArtnetReceiver artnet_;
+
+void setup() override {
+    artnet_.setup();                      // bind 6454, start receive thread
+    // async, lowest latency (fires on the receive thread — guard shared state):
+    artnet_.onDmx.listen([](DmxFrame& f) {
+        // f.universe, f.sequence, f.length, f.data (512 bytes)
+    });
+}
+
+void update() override {
+    // or poll the latest state on the main thread, anytime:
+    uint8_t r = artnet_.getChannel(0, 1);   // universe 0, channel 1 (1-based)
+    if (artnet_.hasNewData()) { /* something changed since last frame */ }
+}
+```
+
+```cpp
+bool setup(port = 6454);   void close();   bool isListening() const;
+tc::Event<DmxFrame> onDmx; // each received ArtDmx (state already updated)
+tc::Event<int>      onSync; // an ArtSync arrived (reserved arg)
+
+uint8_t getChannel(universe, channel) const;   // 1-based, 0 if unseen
+std::vector<uint8_t> getDmx(universe) const;    // latest 512, empty if unseen
+std::vector<int> getUniverses() const;          // universes seen
+bool hasUniverse(universe) const;
+bool hasNewData();   // any universe updated since the last call (clears on read)
+```
+
+- A short ArtDmx (length < 512) updates only the channels it carries; the rest of
+  the universe keeps its previous value. `getChannel` / `getDmx` always expose a
+  full 512.
+- **ArtSync is applied immediately**: each ArtDmx updates the visible state the
+  moment it arrives. `onSync` just notifies you one was received (use it if you
+  want to read all universes together as a coherent frame); there is no
+  receive-side sync staging.
 
 ## Example
 

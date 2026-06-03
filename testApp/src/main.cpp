@@ -9,11 +9,16 @@
 
 #include <tcxArtnet.h>
 
+#include <atomic>
+#include <chrono>
 #include <cstdio>
 #include <cstring>
+#include <thread>
 #include <vector>
 
 using namespace tcx;
+
+static void sleepMs(int ms) { std::this_thread::sleep_for(std::chrono::milliseconds(ms)); }
 
 static int g_pass = 0, g_fail = 0;
 static void check(const char* name, bool ok) {
@@ -154,6 +159,50 @@ int main() {
     check("re-call while running stays running (single thread)", cap.isAutoSending());
     cap.stopAutoSend();
     check("stop after synced + retune returns", !cap.isAutoSending());
+
+    // ----- Sender <-> Receiver loopback round-trip (no hardware) -----
+    ArtnetReceiver rrx;
+    bool rok = rrx.setup(ARTNET_PORT);
+    check("receiver setup + listening", rok && rrx.isListening());
+
+    std::atomic<int> dmxEvents{0}, syncEvents{0};
+    std::atomic<int> lastUni{-1};
+    auto lDmx  = rrx.onDmx.listen([&](DmxFrame& f) { dmxEvents++; lastUni.store(f.universe); });
+    auto lSync = rrx.onSync.listen([&](int&) { syncEvents++; });
+
+    ArtnetSender rtx;
+    rtx.setup("127.0.0.1");
+    rtx.setColor(5, 1, tc::Color(0, 1, 0));  // uni5 ch1=0 ch2=255 ch3=0
+    rtx.setChannel(5, 100, 222);
+
+    // Loopback is reliable; retry briefly to absorb scheduling jitter.
+    for (int i = 0; i < 25 && dmxEvents.load() == 0; ++i) { rtx.send(); sleepMs(20); }
+    sleepMs(50);
+    check("receiver onDmx fired (universe 5)", dmxEvents.load() > 0 && lastUni.load() == 5);
+    check("receiver state matches sent values",
+          rrx.getChannel(5, 1) == 0 && rrx.getChannel(5, 2) == 255 &&
+          rrx.getChannel(5, 3) == 0 && rrx.getChannel(5, 100) == 222);
+    check("getDmx(5) is 512 bytes", rrx.getDmx(5).size() == 512);
+    check("hasUniverse(5), not 6", rrx.hasUniverse(5) && !rrx.hasUniverse(6));
+    check("getUniverses() == {5}", rrx.getUniverses() == std::vector<int>({5}));
+    check("getChannel out-of-range/unseen -> 0",
+          rrx.getChannel(5, 0) == 0 && rrx.getChannel(5, 513) == 0 && rrx.getChannel(9, 1) == 0);
+
+    // hasNewData() latches then clears.
+    bool firstNew = rrx.hasNewData();
+    bool secondNew = rrx.hasNewData();
+    check("hasNewData true once then clears", firstNew && !secondNew);
+
+    // onSync fires on ArtSync.
+    rtx.sendSync();
+    for (int i = 0; i < 25 && syncEvents.load() == 0; ++i) { rtx.sendSync(); sleepMs(20); }
+    sleepMs(50);
+    check("receiver onSync fired", syncEvents.load() > 0);
+
+    lDmx.disconnect();
+    lSync.disconnect();
+    rrx.close();
+    check("getDmx after close is empty", rrx.getDmx(5).empty());
 
     std::printf("\n=== %d passed, %d failed ===\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;

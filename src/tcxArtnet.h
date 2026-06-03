@@ -8,3 +8,4 @@
 
 #include "tcxArtnetConstants.h"
 #include "tcxArtnetSender.h"
+#include "tcxArtnetReceiver.h"
