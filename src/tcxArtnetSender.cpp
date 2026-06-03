@@ -187,15 +187,31 @@ bool ArtnetSender::sendUniverse(int universe) {
     return sendUniverseLocked(universe, *buf);
 }
 
+bool ArtnetSender::sendSync() {
+    lock_guard<mutex> lock(dataMutex_);
+    return sendSyncLocked();
+}
+
 // ----------------------------------------------------------------------------- auto-send
 void ArtnetSender::startAutoSend(float fps) {
+    startAutoSendImpl(fps, /*synchronous=*/false);
+}
+
+void ArtnetSender::startAutoSendSynced(float fps) {
+    startAutoSendImpl(fps, /*synchronous=*/true);
+}
+
+void ArtnetSender::startAutoSendImpl(float fps, bool synchronous) {
     // Floor at 1 Hz: keeps the sleep <= 1s (so stopAutoSend()'s join always
     // returns within ~1s) and still far exceeds Art-Net's ~0.25 Hz (every 4s)
     // keep-alive minimum. Also guards the 1000/fps division in autoSendLoop().
     if (fps <= 0.0f) fps = 1.0f;
     if (fps > ARTNET_MAX_FPS) fps = ARTNET_MAX_FPS;
     fps_.store(fps);
-    if (running_.exchange(true)) return;  // already running -> just retuned fps
+    synchronous_.store(synchronous);
+    // exchange() guarantees only the first caller spawns the thread; a later
+    // call (either variant) just retuned fps_/synchronous_ above.
+    if (running_.exchange(true)) return;
     thread_ = thread([this]() { autoSendLoop(); });
 }
 
@@ -252,6 +268,36 @@ void ArtnetSender::buildArtDmxPacket(int universe, uint8_t sequence,
     out.insert(out.end(), data.begin(), data.end());
 }
 
+void ArtnetSender::buildArtSyncPacket(vector<uint8_t>& out) const {
+    out.clear();
+    out.reserve(14);
+    // ID[8] "Art-Net\0"
+    const char* id = "Art-Net";
+    for (int i = 0; i < 7; ++i) out.push_back(static_cast<uint8_t>(id[i]));
+    out.push_back(0);
+    // OpCode (little-endian)
+    out.push_back(static_cast<uint8_t>(ARTNET_OPCODE_SYNC & 0xFF));
+    out.push_back(static_cast<uint8_t>((ARTNET_OPCODE_SYNC >> 8) & 0xFF));
+    // Protocol version (big-endian)
+    out.push_back(0);
+    out.push_back(ARTNET_PROTOCOL_VER);
+    // Aux1, Aux2 (reserved, transmit as zero)
+    out.push_back(0);
+    out.push_back(0);
+}
+
+bool ArtnetSender::sendSyncLocked() {
+    if (destinations_.empty()) return false;
+    buildArtSyncPacket(packetScratch_);
+    bool ok = true;
+    for (auto& d : destinations_) {
+        if (!socket_.sendTo(d.host, d.port, packetScratch_.data(), packetScratch_.size())) {
+            ok = false;
+        }
+    }
+    return ok;
+}
+
 bool ArtnetSender::sendUniverseLocked(int universe, const array<uint8_t, DMX_UNIVERSE_SIZE>& data) {
     if (destinations_.empty()) return false;
     // Sequence 1..255 looping (0 means "disabled" in the spec).
@@ -272,6 +318,8 @@ void ArtnetSender::autoSendLoop() {
         {
             lock_guard<mutex> lock(dataMutex_);
             for (auto& [uni, buf] : universes_) sendUniverseLocked(uni, buf);
+            // ArtSync goes after all ArtDmx so nodes latch this whole frame at once.
+            if (synchronous_.load()) sendSyncLocked();
         }
         float fps = fps_.load();
         int ms = static_cast<int>(1000.0f / fps);

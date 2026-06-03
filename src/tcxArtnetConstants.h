@@ -37,6 +37,11 @@ inline constexpr size_t ARTNET_DEFAULT_MAX_UNIVERSES = 2048;
 // OpOutput / ArtDmx. Goes on the wire little-endian (low byte first): 0x00 0x50.
 inline constexpr uint16_t ARTNET_OPCODE_DMX = 0x5000;
 
+// OpSync / ArtSync. Tells every node to latch its buffered ArtDmx data at once,
+// so multiple universes update on the same frame (no inter-universe tearing).
+// Little-endian on the wire: 0x00 0x52.
+inline constexpr uint16_t ARTNET_OPCODE_SYNC = 0x5200;
+
 // Protocol version 14 (current). Sent big-endian: hi=0, lo=14.
 inline constexpr uint8_t ARTNET_PROTOCOL_VER = 14;
 

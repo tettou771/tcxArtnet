@@ -54,6 +54,31 @@ int main() {
         check("ch3 B == 0", buf[18 + 2] == 0);
         check("ch10 == 200", buf[18 + 9] == 200);
     }
+    // ----- ArtSync: send() is ArtDmx-only; sendSync() emits a 14-byte ArtSync -----
+    // Drain whatever the retry loop above already sent, then send one clean frame.
+    while (rx.receive(buf, sizeof(buf)) > 0) {}
+    tx.send();       // ArtDmx (universe 0)
+    tx.sendSync();   // ArtSync
+    // Collect the two packets and classify them by opcode.
+    int dmxCount = 0, syncCount = 0, syncLen = 0;
+    for (int got = 0; got < 2; ++got) {
+        int m = rx.receive(buf, sizeof(buf));
+        if (m <= 0) break;
+        uint16_t op = static_cast<uint16_t>(buf[8] | (buf[9] << 8));  // little-endian
+        if (op == ARTNET_OPCODE_DMX) ++dmxCount;
+        else if (op == ARTNET_OPCODE_SYNC) { ++syncCount; syncLen = m; }
+    }
+    check("send()+sendSync() -> 1 ArtDmx + 1 ArtSync", dmxCount == 1 && syncCount == 1);
+    check("ArtSync packet is 14 bytes", syncLen == 14);
+    if (syncCount == 1) {
+        // Re-send sync alone to inspect its bytes deterministically.
+        while (rx.receive(buf, sizeof(buf)) > 0) {}
+        tx.sendSync();
+        int m = rx.receive(buf, sizeof(buf));
+        check("ArtSync id + opcode 0x5200 + protver",
+              m == 14 && std::memcmp(buf, "Art-Net", 7) == 0 && buf[7] == 0 &&
+              buf[8] == 0x00 && buf[9] == 0x52 && buf[10] == 0 && buf[11] == 14);
+    }
     rx.close();
 
     // ----- state / edge cases (no network) -----
@@ -120,6 +145,15 @@ int main() {
     check("startAutoSend(0) -> running", cap.isAutoSending());
     cap.stopAutoSend();
     check("stopAutoSend returns (no hang)", !cap.isAutoSending());
+
+    // synced variant + retune: re-calling either variant while running must keep
+    // a single thread (no second spawn) and stop cleanly.
+    cap.startAutoSendSynced(20);
+    check("startAutoSendSynced -> running", cap.isAutoSending());
+    cap.startAutoSend(10);  // retune same thread, switch sync off
+    check("re-call while running stays running (single thread)", cap.isAutoSending());
+    cap.stopAutoSend();
+    check("stop after synced + retune returns", !cap.isAutoSending());
 
     std::printf("\n=== %d passed, %d failed ===\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;

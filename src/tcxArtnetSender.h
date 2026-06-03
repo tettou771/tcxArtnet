@@ -98,13 +98,23 @@ public:
     uint8_t getChannel(int universe, int channel) const;
 
     // ------------------------------------------------------------------ send
-    bool send();                  // send every active universe once
+    bool send();                  // send every active universe once (ArtDmx only)
     bool sendUniverse(int universe);  // send one universe once (creates it zeroed)
 
+    // Emit one ArtSync to all destinations: every node latches its buffered
+    // ArtDmx simultaneously, so multiple universes update on the same frame.
+    // Call it right after send() (manual sync). Note: sending ArtSync puts nodes
+    // into synchronous mode; you must keep sending it (every frame, within ~4s)
+    // or they freeze briefly then revert to async output. send()/sendUniverse()
+    // never append it for you — sync is always explicit.
+    bool sendSync();
+
     // ------------------------------------------------------------------ auto-send (background thread)
-    // Keep resending all active universes at ~fps Hz. Calling again while running
-    // just retunes the rate. fps is floored to 1 and clamped to ARTNET_MAX_FPS.
-    void startAutoSend(float fps = 30.0f);
+    // Keep resending all active universes at ~fps Hz on a background thread.
+    // Calling either variant again while running just retunes (rate + sync mode)
+    // without starting a second thread. fps is floored to 1, clamped to MAX_FPS.
+    void startAutoSend(float fps = 30.0f);        // ArtDmx only
+    void startAutoSendSynced(float fps = 30.0f);  // ArtDmx + ArtSync each tick
     void stopAutoSend();
     bool isAutoSending() const { return running_.load(); }
 
@@ -116,7 +126,12 @@ private:
     void buildArtDmxPacket(int universe, uint8_t sequence,
                            const std::array<uint8_t, DMX_UNIVERSE_SIZE>& data,
                            std::vector<uint8_t>& out) const;
+    void buildArtSyncPacket(std::vector<uint8_t>& out) const;
     bool sendUniverseLocked(int universe, const std::array<uint8_t, DMX_UNIVERSE_SIZE>& data);
+    bool sendSyncLocked();  // must hold dataMutex_
+    // Shared impl for both startAutoSend variants: retunes if already running so
+    // a second call never spawns a second thread.
+    void startAutoSendImpl(float fps, bool synchronous);
     void autoSendLoop();
 
     tc::UdpSocket socket_;
@@ -129,6 +144,7 @@ private:
 
     std::thread thread_;
     std::atomic<bool> running_{false};
+    std::atomic<bool> synchronous_{false};  // auto-send appends ArtSync each tick
     std::atomic<float> fps_{30.0f};
 };
 

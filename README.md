@@ -90,12 +90,14 @@ size_t getUniverseCount() const;
 std::vector<int> getUniverses() const;      // active universe numbers, ascending
 
 // Send
-bool send();                  // send every active universe once
+bool send();                  // send every active universe once (ArtDmx only)
 bool sendUniverse(universe);  // send one universe once
+bool sendSync();              // emit one ArtSync (latch all universes at once)
 
 // Background auto-refresh
-void startAutoSend(fps = 30);  // floored to >=1 Hz, clamped to <=44 Hz; re-tunes if running
-void stopAutoSend();
+void startAutoSend(fps = 30);        // ArtDmx only
+void startAutoSendSynced(fps = 30);  // ArtDmx + ArtSync each tick
+void stopAutoSend();                 // floored to >=1 Hz, clamped to <=44 Hz; re-tunes if running
 bool isAutoSending() const;
 
 // Limits
@@ -109,6 +111,15 @@ size_t getMaxUniverses() const;
   every lighting desk and fixture manual.
 - **Universes** use the 15-bit Art-Net port address (`Net` + `SubUni`); pass the
   plain universe number `0..32767`. Out-of-range values are rejected with a warning.
+- **ArtSync (multi-universe sync):** spanning a fixture/wall across several
+  universes? Sending each `ArtDmx` separately lets nodes output them at slightly
+  different times (tearing). `sendSync()` (or `startAutoSendSynced()`) emits an
+  `ArtSync` after the `ArtDmx` batch so every node latches the whole frame at
+  once. Sync is **always explicit** — `send()` never appends it. Caveat: once a
+  node receives `ArtSync` it enters synchronous mode and **waits** for the next
+  one; if you stop sending `ArtSync` for ~4 s it reverts to immediate output. So
+  pair sync with a per-frame loop — i.e. `send(); sendSync();` every frame, or
+  just `startAutoSendSynced()`. (Irrelevant for a single universe.)
 - **`clear` vs `remove`:** `clear(u)` zeros a universe but keeps sending it (a
   blackout that still refreshes the DMX link); `removeUniverse(u)` drops it from
   the active set entirely so it's no longer transmitted.
