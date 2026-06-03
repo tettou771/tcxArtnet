@@ -35,8 +35,8 @@ Add it to your project's `addons.make`:
 tcxArtnet
 ```
 
-…then `trusscli update`. There's no build config to write — it's header-only and
-TrussC auto-collects `src/`.
+…then `trusscli update`. There's no build config to write — TrussC auto-collects
+`src/` and builds the addon as a static library.
 
 ## Quick start
 
