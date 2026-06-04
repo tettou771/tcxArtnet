@@ -3,6 +3,7 @@
   "author": "tettou771",
   "license": "MIT",
   "category": "hardware",
+  "platforms": ["macos", "windows", "linux"],
   "keywords": ["artnet", "dmx", "dmx512", "lighting", "stage", "network"],
   "screenshot": "docs/art-net-logo.png"
 }

@@ -252,10 +252,11 @@ nc -u -l 6454 | xxd | head      # first 8 bytes read "Art-Net", opcode 00 50
 
 ## Tests
 
-`testApp/` is a headless console test: it sends an ArtDmx frame to loopback and
-asserts the packet format, plus the channel/universe edge cases and the universe
-cap. CI builds it on macOS / Windows / Linux and runs it (`test_mode: test`), so
-a non-zero exit fails the build. Run it locally with `trusscli run -p testApp`.
+`tests/` is a headless console test: it asserts the ArtDmx / ArtSync / ArtPoll
+wire format, the channel & universe edge cases, the universe cap, and a
+Sender↔Receiver loopback round-trip. CI (`TrussC-org/ci-actions`) builds the
+addon + every `example-*/` and runs `tests/` on macOS / Windows / Linux; a
+non-zero exit fails the build. Run it locally with `trusscli run -p tests`.
 
 ## License
 

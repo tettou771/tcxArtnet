@@ -1,7 +1,7 @@
 // =============================================================================
-// tcxArtnet testApp - headless behavioral test (no window).
+// tcxArtnet tests - headless behavioral test (no window).
 //
-// Built and run by CI (2bbb/trussc-actions build-addon.yml, test_mode: "test"):
+// Built and run by CI (TrussC-org/ci-actions builds + runs tests/):
 // exit 0 = all pass, non-zero = failure -> CI fails. Console only, so it runs on
 // headless macOS / Windows / Linux runners. The receiver uses TrussC's own
 // tc::UdpSocket (not raw POSIX sockets) so it compiles on Windows too.
