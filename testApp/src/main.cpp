@@ -23,6 +23,7 @@ static void sleepMs(int ms) { std::this_thread::sleep_for(std::chrono::milliseco
 static int g_pass = 0, g_fail = 0;
 static void check(const char* name, bool ok) {
     std::printf("%-52s %s\n", name, ok ? "PASS" : "FAIL");
+    std::fflush(stdout);  // flush each line so CI logs survive a later crash/timeout
     ok ? ++g_pass : ++g_fail;
 }
 
@@ -279,5 +280,6 @@ int main() {
     check("ArtnetNode enablePollReply(false)", !node.isPollReplyEnabled());
 
     std::printf("\n=== %d passed, %d failed ===\n", g_pass, g_fail);
+    std::fflush(stdout);
     return g_fail == 0 ? 0 : 1;
 }
