@@ -1,11 +1,15 @@
 # tcxArtnet
 
+<img src="docs/art-net-logo.png" alt="Art-Net" width="140" align="right">
+
 [![CI](https://github.com/tettou771/tcxArtnet/actions/workflows/ci.yml/badge.svg)](https://github.com/tettou771/tcxArtnet/actions/workflows/ci.yml)
 
-Art-Net sender for [TrussC](https://github.com/TrussC-org/TrussC). Drive DMX512
-lighting fixtures and Art-Net nodes (moving heads, LED pars, dimmers, …) straight
-from a TrussC app over UDP — no external library, it just wraps the core
-`UdpSocket`.
+Art-Net sender, receiver, and node discovery for
+[TrussC](https://github.com/TrussC-org/TrussC). Drive DMX512 lighting fixtures and
+Art-Net nodes (moving heads, LED pars, dimmers, …) straight from a TrussC app over
+UDP — no external library, it just wraps the core `UdpSocket`.
+
+> *Art-Net™ Designed by and Copyright Artistic Licence Engineering Ltd.*
 
 > **Interop verified with [QLC+](https://www.qlcplus.org/)** (a widely-used Art-Net
 > controller), both directions: QLC+ output → `ArtnetReceiver` (DMX visualised live),
@@ -220,6 +224,12 @@ node.enablePollReply(true);   // opt-in; off by default
   `setUniverses` / `setVendor` (ESTA) / `setOem`). IP / MAC / version are auto.
 - A node serving several universes sends one reply per universe; the receiver
   **merges** them per source IP, so `getNodes()` shows the full universe set.
+- **OEM code:** ArtPollReply carries an OEM product code. tcxArtnet defaults to
+  `OemUnknown` (`0x00FF`). Per the Art-Net policy, *any product that implements
+  Art-Net requires an OEM Code from Artistic Licence* — so if you ship a real
+  product, [request a free OEM code](https://art-net.org.uk/oem-code-zone#apply-for-oem-code)
+  and set it with `setOem()` (and your ESTA manufacturer id with `setVendor()`).
+  Don't invent a number — leave the default until you have a registered one.
 
 ## Example
 
@@ -249,6 +259,10 @@ a non-zero exit fails the build. Run it locally with `trusscli run -p testApp`.
 
 ## License
 
-MIT — see [LICENSES.md](LICENSES.md). "Art-Net™" is a trademark of Artistic
-Licence Engineering Ltd; the protocol is royalty-free and implemented here
-independently.
+MIT — see [LICENSES.md](LICENSES.md).
+
+**Art-Net™ Designed by and Copyright Artistic Licence Engineering Ltd.** The
+Art-Net protocol is royalty-free (subject to the trademark credit above and an
+OEM code for shipped products) and implemented here independently. The Art-Net
+logo (`docs/art-net-logo.png`) is the property of Artistic Licence Engineering
+Ltd, used per their [logo policy](https://art-net.org.uk/).
