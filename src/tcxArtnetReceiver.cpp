@@ -9,7 +9,7 @@
 
 using namespace std;
 
-namespace tcx {
+namespace tcx::artnet {
 
 ArtnetReceiver::~ArtnetReceiver() {
     close();
@@ -199,4 +199,4 @@ void ArtnetReceiver::clearNodes() {
     nodes_.clear();
 }
 
-} // namespace tcx
+} // namespace tcx::artnet

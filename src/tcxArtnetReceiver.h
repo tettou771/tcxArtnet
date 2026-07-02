@@ -31,7 +31,7 @@
 #include <string>
 #include <vector>
 
-namespace tcx {
+namespace tcx::artnet {
 
 // One received ArtDmx frame. data is always the full 512-channel universe state
 // (merged) at receive time; length is how many channels the packet actually
@@ -93,4 +93,16 @@ private:
     bool newData_ = false;
 };
 
-} // namespace tcx
+} // namespace tcx::artnet
+
+// -----------------------------------------------------------------------------
+// Backward compatibility. The canonical namespace is now `tcx::artnet`. These
+// silent aliases keep older code compiling: flat `tcx::ArtnetReceiver` and legacy
+// `tc::ArtnetReceiver` / `trussc::ArtnetReceiver`. DEPRECATED — removed in v1.0.0.
+// (No [[deprecated]] attribute: under the usual `using namespace tc;` it would
+//  warn on idiomatic unqualified use too. See tcxArtnet README for migration.)
+// -----------------------------------------------------------------------------
+namespace tcx    { using artnet::DmxFrame; }            // deprecated: remove at v1.0.0
+namespace tcx    { using artnet::ArtnetReceiver; }      // deprecated: remove at v1.0.0
+namespace trussc { using tcx::artnet::DmxFrame; }       // deprecated: remove at v1.0.0
+namespace trussc { using tcx::artnet::ArtnetReceiver; } // deprecated: remove at v1.0.0

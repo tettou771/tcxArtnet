@@ -12,7 +12,7 @@
 #include <cstdint>
 #include <string>
 
-namespace tcx {
+namespace tcx::artnet {
 
 // UDP port every Art-Net node listens on.
 inline constexpr int ARTNET_PORT = 6454;
@@ -62,4 +62,40 @@ inline const std::string ARTNET_BROADCAST = "2.255.255.255";
 // to this so a runaway fps value can't flood the wire.
 inline constexpr float ARTNET_MAX_FPS = 44.0f;
 
-} // namespace tcx
+} // namespace tcx::artnet
+
+// -----------------------------------------------------------------------------
+// Backward compatibility. The canonical namespace is now `tcx::artnet`. These
+// silent aliases keep older code compiling: flat `tcx::ARTNET_PORT` and legacy
+// `tc::ARTNET_PORT` / `trussc::ARTNET_PORT`. DEPRECATED — removed in v1.0.0.
+// (No [[deprecated]] attribute: under the usual `using namespace tc;` it would
+//  warn on idiomatic unqualified use too. See tcxArtnet README for migration.)
+// -----------------------------------------------------------------------------
+namespace tcx {
+    using artnet::ARTNET_PORT;                  // deprecated: remove at v1.0.0
+    using artnet::DMX_UNIVERSE_SIZE;            // deprecated: remove at v1.0.0
+    using artnet::ARTNET_MAX_UNIVERSE;          // deprecated: remove at v1.0.0
+    using artnet::ARTNET_DEFAULT_MAX_UNIVERSES; // deprecated: remove at v1.0.0
+    using artnet::ARTNET_OPCODE_DMX;            // deprecated: remove at v1.0.0
+    using artnet::ARTNET_OPCODE_SYNC;           // deprecated: remove at v1.0.0
+    using artnet::ARTNET_OPCODE_POLL;           // deprecated: remove at v1.0.0
+    using artnet::ARTNET_OPCODE_POLLREPLY;      // deprecated: remove at v1.0.0
+    using artnet::ARTNET_OEM_UNKNOWN;           // deprecated: remove at v1.0.0
+    using artnet::ARTNET_PROTOCOL_VER;          // deprecated: remove at v1.0.0
+    using artnet::ARTNET_BROADCAST;             // deprecated: remove at v1.0.0
+    using artnet::ARTNET_MAX_FPS;               // deprecated: remove at v1.0.0
+}
+namespace trussc {
+    using tcx::artnet::ARTNET_PORT;                  // deprecated: remove at v1.0.0
+    using tcx::artnet::DMX_UNIVERSE_SIZE;            // deprecated: remove at v1.0.0
+    using tcx::artnet::ARTNET_MAX_UNIVERSE;          // deprecated: remove at v1.0.0
+    using tcx::artnet::ARTNET_DEFAULT_MAX_UNIVERSES; // deprecated: remove at v1.0.0
+    using tcx::artnet::ARTNET_OPCODE_DMX;            // deprecated: remove at v1.0.0
+    using tcx::artnet::ARTNET_OPCODE_SYNC;           // deprecated: remove at v1.0.0
+    using tcx::artnet::ARTNET_OPCODE_POLL;           // deprecated: remove at v1.0.0
+    using tcx::artnet::ARTNET_OPCODE_POLLREPLY;      // deprecated: remove at v1.0.0
+    using tcx::artnet::ARTNET_OEM_UNKNOWN;           // deprecated: remove at v1.0.0
+    using tcx::artnet::ARTNET_PROTOCOL_VER;          // deprecated: remove at v1.0.0
+    using tcx::artnet::ARTNET_BROADCAST;             // deprecated: remove at v1.0.0
+    using tcx::artnet::ARTNET_MAX_FPS;               // deprecated: remove at v1.0.0
+}

@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-namespace tcx {
+namespace tcx::artnet {
 
 // What this app reports about itself in an ArtPollReply, i.e. only when it acts
 // as a discoverable node. IP / MAC / firmware version / port flags are derived
@@ -33,4 +33,16 @@ struct ArtnetNodeInfo {
     uint16_t esta = 0;
 };
 
-} // namespace tcx
+} // namespace tcx::artnet
+
+// -----------------------------------------------------------------------------
+// Backward compatibility. The canonical namespace is now `tcx::artnet`. These
+// silent aliases keep older code compiling: flat `tcx::NodeIdentity` and legacy
+// `tc::NodeIdentity` / `trussc::NodeIdentity`. DEPRECATED — removed in v1.0.0.
+// (No [[deprecated]] attribute: under the usual `using namespace tc;` it would
+//  warn on idiomatic unqualified use too. See tcxArtnet README for migration.)
+// -----------------------------------------------------------------------------
+namespace tcx    { using artnet::NodeIdentity; }        // deprecated: remove at v1.0.0
+namespace tcx    { using artnet::ArtnetNodeInfo; }      // deprecated: remove at v1.0.0
+namespace trussc { using tcx::artnet::NodeIdentity; }   // deprecated: remove at v1.0.0
+namespace trussc { using tcx::artnet::ArtnetNodeInfo; } // deprecated: remove at v1.0.0

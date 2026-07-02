@@ -32,7 +32,7 @@
 #include <thread>
 #include <vector>
 
-namespace tcx {
+namespace tcx::artnet {
 
 // =============================================================================
 // ArtnetSender
@@ -160,4 +160,14 @@ private:
     std::atomic<float> fps_{30.0f};
 };
 
-} // namespace tcx
+} // namespace tcx::artnet
+
+// -----------------------------------------------------------------------------
+// Backward compatibility. The canonical namespace is now `tcx::artnet`. These
+// silent aliases keep older code compiling: flat `tcx::ArtnetSender` and legacy
+// `tc::ArtnetSender` / `trussc::ArtnetSender`. DEPRECATED — removed in v1.0.0.
+// (No [[deprecated]] attribute: under the usual `using namespace tc;` it would
+//  warn on idiomatic unqualified use too. See tcxArtnet README for migration.)
+// -----------------------------------------------------------------------------
+namespace tcx    { using artnet::ArtnetSender; } // deprecated: remove at v1.0.0
+namespace trussc { using tcx::artnet::ArtnetSender; } // deprecated: remove at v1.0.0

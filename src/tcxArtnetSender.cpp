@@ -11,7 +11,7 @@
 
 using namespace std;
 
-namespace tcx {
+namespace tcx::artnet {
 
 // ----------------------------------------------------------------------------- lifecycle
 ArtnetSender::~ArtnetSender() {
@@ -408,4 +408,4 @@ void ArtnetSender::autoSendLoop() {
     }
 }
 
-} // namespace tcx
+} // namespace tcx::artnet

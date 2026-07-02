@@ -22,7 +22,7 @@
 #include <string>
 #include <vector>
 
-namespace tcx {
+namespace tcx::artnet {
 
 class ArtnetNode {
 public:
@@ -88,4 +88,14 @@ private:
     bool pollReplyEnabled_ = false;
 };
 
-} // namespace tcx
+} // namespace tcx::artnet
+
+// -----------------------------------------------------------------------------
+// Backward compatibility. The canonical namespace is now `tcx::artnet`. These
+// silent aliases keep older code compiling: flat `tcx::ArtnetNode` and legacy
+// `tc::ArtnetNode` / `trussc::ArtnetNode`. DEPRECATED — removed in v1.0.0.
+// (No [[deprecated]] attribute: under the usual `using namespace tc;` it would
+//  warn on idiomatic unqualified use too. See tcxArtnet README for migration.)
+// -----------------------------------------------------------------------------
+namespace tcx    { using artnet::ArtnetNode; } // deprecated: remove at v1.0.0
+namespace trussc { using tcx::artnet::ArtnetNode; } // deprecated: remove at v1.0.0
